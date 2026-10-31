@@ -22,9 +22,9 @@
 #include <cstring>
 #include <string>
 
-#include "../simulator/eb_backend.h"
-#include "../emoji-studio/expression.h"
-#include "../emoji-studio/canvas.h"
+#include "simulator/eb_backend.h"
+#include "emoji-studio/expression.h"
+#include "emoji-studio/canvas.h"
 
 #pragma comment(lib, "comctl32.lib")
 

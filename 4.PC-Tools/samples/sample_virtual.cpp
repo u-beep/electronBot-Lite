@@ -20,11 +20,11 @@
 #include <thread>
 #include <conio.h>
 
-#include "../simulator/virtual_robot.h"
-#include "../simulator/win32_preview.h"
-#include "../emoji-studio/expression.h"
-#include "../emoji-studio/canvas.h"
-#include "../emoji-studio/ebanim.h"
+#include "simulator/virtual_robot.h"
+#include "simulator/win32_preview.h"
+#include "emoji-studio/expression.h"
+#include "emoji-studio/canvas.h"
+#include "emoji-studio/ebanim.h"
 
 // 与 2.SDK/sample.cpp 相同的彩虹帧生成器
 static void MakeRainbowFrame(uint8_t* _buffer, float _t)

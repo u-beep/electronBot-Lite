@@ -24,10 +24,7 @@
 #include <atomic>
 
 #include "eb_joints.h"
-
-#define EB_SCREEN_WIDTH  240
-#define EB_SCREEN_HEIGHT 240
-#define EB_FRAME_SIZE    (EB_SCREEN_WIDTH * EB_SCREEN_HEIGHT * 3) // 172800 B
+#include "common/eb_screen.h"   // EB_SCREEN_* / EB_FRAME_SIZE（单一来源）
 
 class VirtualElectronBot
 {

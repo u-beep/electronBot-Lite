@@ -4,3 +4,4 @@ add_library(eb-emoji STATIC
         expression.cpp
         ebanim.cpp)
 target_include_directories(eb-emoji PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
+target_link_libraries(eb-emoji PUBLIC eb-common)

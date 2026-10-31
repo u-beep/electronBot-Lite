@@ -24,13 +24,8 @@
 #include <string>
 #include <vector>
 
-#include "../emoji-studio/ebanim.h"
-
-#ifndef EB_FRAME_SIZE
-#define EB_SCREEN_WIDTH  240
-#define EB_SCREEN_HEIGHT 240
-#define EB_FRAME_SIZE (EB_SCREEN_WIDTH * EB_SCREEN_HEIGHT * 3) // 172800 bytes
-#endif
+#include "emoji-studio/ebanim.h"
+#include "common/eb_screen.h"
 
 #pragma comment(lib, "windowscodecs.lib")
 #pragma comment(lib, "ole32.lib")

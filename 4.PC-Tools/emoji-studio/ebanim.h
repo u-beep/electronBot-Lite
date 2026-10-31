@@ -10,10 +10,12 @@
 #include <string>
 #include <vector>
 
+#include "common/eb_screen.h"
+
 struct AnimFrame
 {
     uint16_t durationMs = 33;
-    uint8_t pixels[240 * 240 * 3] = {};
+    uint8_t pixels[EB_FRAME_SIZE] = {};   // 240x240 RGB888
 };
 
 class EbAnim

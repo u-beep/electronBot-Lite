@@ -17,6 +17,10 @@ if(MSVC)
     add_compile_options(/utf-8)   # 源码含中文注释，统一按 UTF-8 解析
 endif()
 
+# 公共层：屏幕几何常量等（eb_screen.h），所有库/可执行经它获得根 include 路径
+add_library(eb-common INTERFACE)
+target_include_directories(eb-common INTERFACE ${CMAKE_CURRENT_SOURCE_DIR})
+
 add_subdirectory(simulator)
 add_subdirectory(emoji-studio)
 add_subdirectory(studio)

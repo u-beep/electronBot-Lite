@@ -8,8 +8,7 @@
 #include <cstdint>
 #include <cmath>
 
-#define EB_LCD_W 240
-#define EB_LCD_H 240
+#include "common/eb_screen.h"   // EB_LCD_W/H = 240（单一来源）
 
 struct Rgb8
 {
