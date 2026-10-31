@@ -1,0 +1,24 @@
+# 构建产物
+build/
+build2/
+Debug/
+Release/
+x64/
+.vs/
+*.obj
+*.pdb
+*.ilk
+*.log
+
+# IDE / 本地工具
+.idea/
+.workbuddy/
+
+# Windows 保留名残留（无法进回收站，手动删除即可）
+nul
+4.PC-Tools/nul
+
+# CMake 生成物
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
