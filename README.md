@@ -40,7 +40,7 @@ ElectronBot 桌面机器人的**精简版**工程，只保留实现本项目的�
 | `2.SDK` | PC 端精简 SDK（C++17，无 OpenCV 依赖）+ 演示程序 sample |
 | `3.Driver/BotDriver` | 机器人 USB 驱动（连接电脑后必装） |
 | `4.PC-Tools` | 纯软件工具链：虚拟机器人模拟器 / 表情工坊 / 上位机 Studio / 帧流转换器 ebconvert（见其 CMakeLists 与 `5.Docs/protocol.md`） |
-| `5.Docs` | 协议文档与架构笔记（USB 分段协议、I2C 舵机指令、带宽计算） |
+| `5.Docs` | 文档：**[onboarding.md](5.Docs/onboarding.md) 项目导读/学习路径**、protocol.md（USB 分段协议、I2C 舵机指令、带宽计算） |
 
 ## 3. 通信协议
 
