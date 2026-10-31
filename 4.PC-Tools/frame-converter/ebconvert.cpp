@@ -11,6 +11,12 @@
 // * GIF 动画：实现帧矩形偏移、透明混合、disposal 0/1/2/3 完整合成
 // * 输出 .ebanim（emoji-studio/ebanim.h 格式，Studio / sample_virtual 可播放）
 // * 缩放默认 contain（保比例 + --bg 底色居中）；--cover 为满屏裁剪
+//
+// 新手导读——GIF 动画为什么需要"合成"？
+//   GIF 每帧可能只存"画面的一小块"（比如只存移动的小方块），
+//   播放器要把这一块贴到一张"画布"上，并按 disposal 规则处理上一帧的痕迹：
+//     disposal 0/1 = 保留上一帧  2 = 该区域还原成背景色  3 = 还原成快照
+//   本程序完整实现了这套规则，是学习 GIF 内部结构的活教材。
 // ============================================================================
 
 #include <windows.h>
@@ -31,9 +37,11 @@
 #pragma comment(lib, "ole32.lib")
 #pragma comment(lib, "shell32.lib")
 
+// ComPtr = COM 对象的智能指针：出了作用域自动 Release()，不用手动管理引用计数
+// （COM 是 Windows 组件模型，WIC 图像库基于它；忘记 Release 就是内存泄漏）
 using Microsoft::WRL::ComPtr;
 
-static const int OUT_W = 240;
+static const int OUT_W = 240;   // 输出尺寸：机器人圆屏 240x240
 static const int OUT_H = 240;
 
 // ---------------------------------------------------------------------------
@@ -45,9 +53,11 @@ static void Die(const char* _msg)
     exit(1);
 }
 
+// 调试开关：设置环境变量 EBTRACE=1 时打印处理过程（定位问题用）
 static const bool g_trace = getenv("EBTRACE") != nullptr;
 #define TRACE(_s) do { if (g_trace) fprintf(stderr, "[trace] %s\n", _s); } while (0)
 
+// WideToNarrow()：宽字符路径转窄字符（fopen 系列只认窄字符）
 static std::string WideToNarrow(const std::wstring& _w)
 {
     int n = WideCharToMultiByte(CP_ACP, 0, _w.c_str(), -1, nullptr, 0, nullptr, nullptr);
@@ -56,6 +66,8 @@ static std::string WideToNarrow(const std::wstring& _w)
     return s;
 }
 
+// QueryU32()：从图片元数据里查一个整数字段（如 GIF 帧矩形/延时）
+// PROPVARIANT 是"万能类型"：同一个变量可能是 1/2/4 字节整数，逐个类型判断取值
 static bool QueryU32(IWICMetadataQueryReader* _qr, const wchar_t* _name, uint32_t* _out)
 {
     if (!_qr)
@@ -327,6 +339,8 @@ static bool ScaleCanvasToFrame(IWICImagingFactory* _fac,
         return false;
 
     // 背景填充 + 居中贴图（BGRA -> RGB888，透明像素按 alpha 落到背景色）
+    // 透明混合公式（alpha 混合）：结果 = 前景 x a + 背景 x (1-a)
+    // >> 8 即除以 256，是"乘以 255 再除以 255"的快速近似
     for (int i = 0; i < OUT_W * OUT_H; i++)
     {
         _outRgb888[i * 3 + 0] = _bg[0];
@@ -362,6 +376,7 @@ static bool ScaleCanvasToFrame(IWICImagingFactory* _fac,
     return true;
 }
 
+// FillRectBgra()：在合成画布上填充一个矩形（disposal 2 用来"擦除"旧帧区域）
 // ---------------------------------------------------------------------------
 static void FillRectBgra(std::vector<uint8_t>* _c, uint32_t _cw, uint32_t _ch,
                          uint32_t _x0, uint32_t _y0, uint32_t _x1, uint32_t _y1,
@@ -375,6 +390,8 @@ static void FillRectBgra(std::vector<uint8_t>* _c, uint32_t _cw, uint32_t _ch,
         }
 }
 
+// ---------------------------------------------------------------------------
+// main()：主流程 = 解析参数 → 创建 WIC 解码器 → 逐帧"合成→缩放" → 导出
 // ---------------------------------------------------------------------------
 int main()
 {
@@ -500,7 +517,8 @@ int main()
                     (int) haveRect, fx, fy, fw, fh, delayMs, disposal,
                     gce.valid ? 1 : 0);
 
-        // 3) 应用上一帧的 disposal 语义
+        // 3) 应用上一帧的 disposal 语义（GIF 帧之间的"擦除规则"）
+        //    2 = 上一帧画的区域还原成背景色；3 = 整个画布还原成绘制前快照
         if (!firstFrame)
         {
             if (prevDisposal == 2)
@@ -537,12 +555,12 @@ int main()
                     break;
                 const uint8_t* s = &framePix[((size_t) y * fw + x) * 4];
                 uint8_t* d = &canvas[((size_t) cy * canvasW + cx) * 4];
-                const uint8_t a = s[3];
-                if (a >= 250)
+                const uint8_t a = s[3];       // alpha = 不透明度（0 透明~255 实色）
+                if (a >= 250)                 // 几乎不透明：直接覆盖
                 {
                     d[0] = s[0]; d[1] = s[1]; d[2] = s[2]; d[3] = 255;
                 }
-                else if (a > 0)
+                else if (a > 0)               // 半透明：与画布已有颜色按比例混合
                 {
                     d[0] = (uint8_t) ((s[0] * a + d[0] * (255 - a)) >> 8);
                     d[1] = (uint8_t) ((s[1] * a + d[1] * (255 - a)) >> 8);
@@ -584,7 +602,8 @@ int main()
             (unsigned) anim.frames.size(), outNarrow.c_str(),
             anim.TotalDurationMs() / 1000.0f,
             anim.frames.size() * (EB_FRAME_SIZE + 2) / 1048576.0);
-    TRACE("before cleanup");    // 先释放所有 COM 对象，再卸载 COM 套间（顺序反了会在退出时崩溃）
+    // 先释放所有 COM 对象，再卸载 COM 套间（顺序反了会在退出时崩溃——踩过的坑）
+    TRACE("before cleanup");
     dec.Reset();
     fac.Reset();
     LocalFree(argvW);

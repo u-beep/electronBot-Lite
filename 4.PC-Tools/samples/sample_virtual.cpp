@@ -11,6 +11,10 @@
 // 用法：
 //   sample_virtual            彩虹动画模式（对应原版 sample）
 //   sample_virtual face       表情动画模式（复用表情库）
+//   sample_virtual 5          自动 5 秒后退出（供自动化测试）
+//
+// 学习价值：对比本文件和 2.SDK/sample.cpp，差异只有第 56 行的类名——
+// 这就是"接口同签名"设计的威力：上层业务代码完全不感知硬件是否存在。
 // ============================================================================
 
 #include <cstdio>
@@ -43,8 +47,9 @@ static void MakeRainbowFrame(uint8_t* _buffer, float _t)
     }
 }
 
-int main(int argc, char** argv)
+int main(int argc, char** argv)          // argc/argv = 命令行参数个数/内容
 {
+    // 第一个参数是 "face" 就进表情模式（strcmp=0 表示字符串相等）
     const bool faceMode = argc > 1 && strcmp(argv[1], "face") == 0;
 
     // 自动退出秒数（可选，供自动化测试）：sample_virtual [face] <seconds>
@@ -53,7 +58,7 @@ int main(int argc, char** argv)
         if (atof(argv[i]) > 0.5)
             autoExitSec = atof(argv[i]);
 
-    VirtualElectronBot robot;
+    VirtualElectronBot robot;            // 关键差异：这里用的是模拟器类！
     if (robot.Connect())
         printf("[virtual] Robot connected! (VID=0x%04X PID=0x%04X)\n", robot.USB_VID, robot.USB_PID);
     else
@@ -62,6 +67,7 @@ int main(int argc, char** argv)
         return 0;
     }
 
+    // 打开预览窗口（独立线程），传入模拟器对象让它有数据可画
     RobotPreviewWindow::Open(&robot,
         faceMode ? "ElectronBot Virtual Screen [face]" : "ElectronBot Virtual Screen [rainbow]");
 
@@ -97,7 +103,7 @@ int main(int argc, char** argv)
 
         const float t = frameCount * 0.033f;
 
-        // 1. 生成画面
+        // 1. 生成画面：face 模式每 150 帧（5 秒）自动换一个表情（%5 循环）
         if (faceMode)
         {
             expr.RenderFrame(ExpressionRenderer::Builtin()[frameCount / 150 % 5],
@@ -124,6 +130,7 @@ int main(int argc, char** argv)
         robot.Sync();
 
         // 4. 读取反馈（模拟舵机 PID 闭环后的实际角度）
+        //    先睡 33ms 再读：给舵机线程一点"追赶"时间，反馈更像真机
         std::this_thread::sleep_for(std::chrono::milliseconds(33));
         robot.GetJointAngles(jointAngles);
         if (frameCount % 30 == 0)

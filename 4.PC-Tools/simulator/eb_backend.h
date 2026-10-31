@@ -20,12 +20,13 @@
 #include <cstdint>
 #include <cstring>
 
+// 预处理器条件编译：编译时二选一，另一份代码完全不参与编译
 #if defined(EB_WITH_REAL_SDK)
     #include "electron_low_level.h"   // -I 指向 2.SDK
-    #define EB_BACKEND_MODE_NAME "Real(USB)"
+    #define EB_BACKEND_MODE_NAME "Real(USB)"    // 状态栏显示的后端名
 #else
     #include "virtual_robot.h"
-    #define EB_BACKEND_MODE_NAME "Virtual"
+    #define EB_BACKEND_MODE_NAME "Virtual"      // 状态栏显示的后端名
 #endif
 
 class RobotBackend
@@ -36,6 +37,8 @@ public:
     static constexpr const float (&JOINT_MAX)[6] = ebjoints::JOINT_MAX;
     static constexpr const char* const (&JOINT_NAME)[6] = ebjoints::JOINT_NAME;
 
+    // 下面每个函数都只是"转发"给内部的 impl 对象（门面模式）：
+    // UI 调 RobotBackend::Connect()，实际干活的是模拟器或真机类
     bool Connect()
     {
         timeStamp = 0;
@@ -50,7 +53,7 @@ public:
     bool Sync()
     {
         const bool ok = impl.Sync();
-        timeStamp = impl.timeStamp;
+        timeStamp = impl.timeStamp;   // 同步内部帧号，状态栏要显示
         return ok;
     }
 
@@ -59,6 +62,7 @@ public:
         impl.SetImageSrc(_rgb888);
 #if defined(EB_WITH_REAL_SDK)
         memcpy(lastFrame, _rgb888, EB_FRAME_SIZE);
+        // 真机屏无法回读，存一份最新画面供 studio 预览
 #endif
     }
 
@@ -68,6 +72,7 @@ public:
         impl.SetJointAngles(_j1, _j2, _j3, _j4, _j5, _j6, _enable);
         const float j[6] = { _j1, _j2, _j3, _j4, _j5, _j6 };
         memcpy(cachedSetPoints, j, sizeof(j));
+        // 真机不回读设定值，本地缓存一份给 UI 显示
     }
 
     void GetServoAngles(float* _out6)

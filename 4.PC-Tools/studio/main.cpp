@@ -6,6 +6,14 @@
 // * 表情切换、舵机使能、FPS 状态
 // * 后端为 VirtualElectronBot 模拟器 —— 未来可无缝切换真机 ElectronLowLevel
 //   （把 VirtualElectronBot 换成 ElectronLowLevel 并链接 2.SDK 即可）
+//
+// 新手导读——本文件结构（Win32 程序标准套路）：
+//   App 结构体       全局状态（一个 g_app 变量装下所有数据）
+//   CreateControls() 创建滑块/按钮/勾选框（Win32"子控件"）
+//   Tick()           每 33ms 定时器触发的"游戏主循环"：渲染表情→喂机器人→同步
+//   PaintScreen()    全部界面绘制（画在内存位图上，避免闪烁）
+//   WndProc()        消息处理：定时器/滑块/按钮/重绘
+//   wWinMain()       程序入口：注册窗口→消息循环
 // ============================================================================
 
 #ifndef UNICODE
@@ -43,30 +51,32 @@ enum CtlId
 
 struct App
 {
-    RobotBackend robot;
-    ExpressionRenderer expr;
-    int currentAnim = 0;
-    float animTime = 0;
-    bool servoEnable = false;
-    float sliderAngles[6] = {0, 0, 0, 0, 0, 0};
+    // ---- 逻辑核心（三件套：机器人后端 + 表情渲染器 + 当前状态） ----
+    RobotBackend robot;            // 机器人后端（模拟器或真机，编译期决定）
+    ExpressionRenderer expr;       // 表情渲染器（画到 canvas 上）
+    int currentAnim = 0;           // 当前播放的表情编号（0..4 = Idle..Sleepy）
+    float animTime = 0;            // 表情动画已播放的时间（毫秒）
+    bool servoEnable = false;      // 舵机是否上电（勾选框状态）
+    float sliderAngles[6] = {0, 0, 0, 0, 0, 0};   // 6 个滑块当前对应的角度
 
-    HWND sliders[6] = {};
-    HWND sliderLabels[6] = {};
-    HWND chkEnable = nullptr;
+    // ---- 界面控件句柄（HWND = Windows 窗口/控件的"身份证号"） ----
+    HWND sliders[6] = {};          // 6 个滑块
+    HWND sliderLabels[6] = {};     // 滑块上方的文字标签
+    HWND chkEnable = nullptr;      // Servo Enable 勾选框
     wchar_t statusText[96] = L"FPS: --   Sync: --";   // 由 PaintScreen 绘制（双缓冲，不闪）
 
     // 渲染缓冲
-    Canvas canvas;
-    uint8_t screenBgr[EB_FRAME_SIZE];
-    float servo[6], setPts[6];
+    Canvas canvas;                 // 表情画布（240x240，喂给机器人屏幕）
+    uint8_t screenBgr[EB_FRAME_SIZE];   // 显存快照的 BGR 版（GDI 贴图用）
+    float servo[6], setPts[6];     // 关节反馈角 / 设定角（文字显示用）
 
-    // FPS 统计
-    DWORD fpsLastTick = 0;
-    int fpsCounter = 0;
-    int fpsValue = 0;
+    // FPS 统计（每秒统计一次渲染次数）
+    DWORD fpsLastTick = 0;         // 上次统计的时刻
+    int fpsCounter = 0;            // 这一秒内已渲染的帧数
+    int fpsValue = 0;              // 上一秒的结果（显示用）
 };
 
-static App g_app;
+static App g_app;                  // 全局唯一实例（Win32 回调函数拿不到 this，用全局传状态）
 
 static const std::vector<ExpressionAnim>& Anims() { return ExpressionRenderer::Builtin(); }
 
@@ -130,15 +140,19 @@ static void CreateControls(HWND hwnd, HINSTANCE hInst)
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// Tick()：主循环的一拍（每 33ms 由 WM_TIMER 触发一次 ≈ 30fps）
+// 每拍做三件事：渲染表情 → 喂给机器人并同步 → 统计 FPS
+// ---------------------------------------------------------------------------
 static void Tick(void)
 {
-    const DWORD now = GetTickCount();
+    const DWORD now = GetTickCount();          // 系统开机以来的毫秒数
     static DWORD lastTick = 0;
     if (lastTick == 0) lastTick = now;
     const float dtMs = (float) (now - lastTick);
     lastTick = now;
 
-    // 1) 表情动画渲染
+    // 1) 表情动画渲染：时间推进 dtMs 毫秒，渲染对应时刻的画面
     g_app.animTime += dtMs;
     g_app.expr.RenderFrame(Anims()[g_app.currentAnim], g_app.animTime, g_app.canvas);
 
@@ -357,7 +371,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             InvalidateRect(hwnd, nullptr, FALSE);
             return 0;
 
-        case WM_HSCROLL:
+        case WM_HSCROLL:      // 任何一个滑块被拖动（6 个滑块共用这一条消息）
         {
             for (int j = 0; j < 6; j++)
             {
@@ -373,7 +387,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
 
-        case WM_COMMAND:
+        case WM_COMMAND:      // 按钮点击 / 勾选框变化（也是共用一条消息，靠 ID 区分）
         {
             const int id = LOWORD(wp);
             if (id >= IDC_BTN_EXPR && id < IDC_BTN_EXPR + 5)
@@ -388,10 +402,10 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
 
-        case WM_PAINT:
+        case WM_PAINT:        // 窗口需要重绘（定时器每帧请求一次）
         {
             PAINTSTRUCT ps;
-            HDC hdc = BeginPaint(hwnd, &ps);
+            HDC hdc = BeginPaint(hwnd, &ps);      // 获取屏幕画布
 
             // 双缓冲：全部内容先画进内存 DC，再一次 BitBlt 到屏幕。
             // 直接画屏幕 DC 会在每帧重绘时产生可见的中间状态（右侧面板闪烁）。
@@ -414,7 +428,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_ERASEBKGND:
             return 1;
 
-        case WM_DESTROY:
+        case WM_DESTROY:      // 用户点了关闭按钮——收尾三连
             KillTimer(hwnd, 1);
             g_app.robot.SetJointAngles(0, 0, 0, 0, 0, 0, false);
             g_app.robot.Sync();
@@ -426,8 +440,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 }
 
 // ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+// wWinMain()：程序入口（GUI 程序的 main）
+// 流程：注册窗口类 → 创建窗口 → 消息循环（程序的一生就在这个循环里）
+// ---------------------------------------------------------------------------
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int nCmdShow)
 {
+    // 初始化通用控件库（滑块 TRACKBAR 属于 comctl32 提供的"通用控件"）
     INITCOMMONCONTROLSEX icc = { sizeof(icc), ICC_BAR_CLASSES };
     InitCommonControlsEx(&icc);
 
